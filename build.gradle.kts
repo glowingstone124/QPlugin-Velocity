@@ -2,8 +2,9 @@ import org.jetbrains.gradle.ext.settings
 import org.jetbrains.gradle.ext.taskTriggers
 
 plugins {
-    kotlin("jvm") version "2.0.20-Beta1"
-    kotlin("kapt") version "2.0.20-Beta1"
+    kotlin("jvm") version "2.1.20"
+    kotlin("kapt") version "2.1.20"
+    kotlin("plugin.serialization") version "2.1.20"
     id("com.github.johnrengelman.shadow") version "8.1.1"
     id("eclipse")
     id("org.jetbrains.gradle.plugin.idea-ext") version "1.1.8"
@@ -11,6 +12,7 @@ plugins {
 
 group = "org.qo"
 version = "1.0-SNAPSHOT"
+val ktor_version = "3.1.2"
 
 repositories {
     mavenCentral()
@@ -26,8 +28,12 @@ dependencies {
     compileOnly("com.velocitypowered:velocity-api:3.4.0-SNAPSHOT")
     kapt("com.velocitypowered:velocity-api:3.4.0-SNAPSHOT")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
+    implementation("io.ktor:ktor-client-core:${ktor_version}")
+    implementation("io.ktor:ktor-client-content-negotiation:2.3.2")
+    implementation("io.ktor:ktor-client-cio:${ktor_version}")
+    implementation("org.quartz-scheduler:quartz:2.5.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
 }
-
 val targetJavaVersion = 21
 kotlin {
     jvmToolchain(targetJavaVersion)
