@@ -73,7 +73,7 @@ class QPluginVelocity @Inject constructor(val logger: Logger, val proxy: ProxySe
 class HeartbeatJob : Job {
     val networkUtils: NetworkUtils = NetworkUtils()
     override fun execute(ctx: JobExecutionContext): Unit = runBlocking {
-        networkUtils.post(Configuration.CONFIG.endpoint + "/accept", Configuration.CONFIG.token)
+        networkUtils.post(Configuration.CONFIG.endpoint + "/qo/proxies/accept", Configuration.CONFIG.token)
     }
 }
 

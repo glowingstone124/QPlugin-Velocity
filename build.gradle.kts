@@ -24,6 +24,11 @@ repositories {
     }
 }
 
+tasks.build {
+    dependsOn(tasks.shadowJar)
+}
+
+
 dependencies {
     compileOnly("com.velocitypowered:velocity-api:3.4.0-SNAPSHOT")
     kapt("com.velocitypowered:velocity-api:3.4.0-SNAPSHOT")
