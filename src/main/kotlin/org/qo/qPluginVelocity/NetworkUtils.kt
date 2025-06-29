@@ -11,7 +11,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 
-class NetworkUtils {
+object NetworkUtils {
 	val client = HttpClient(CIO)
 	suspend fun checkUrl(url: String): Boolean {
 		 return try {

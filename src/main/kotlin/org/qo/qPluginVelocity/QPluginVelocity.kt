@@ -10,6 +10,9 @@ import com.velocitypowered.api.plugin.Plugin
 import com.velocitypowered.api.proxy.ProxyServer
 import com.velocitypowered.api.proxy.server.RegisteredServer
 import com.velocitypowered.api.proxy.server.ServerInfo
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.quartz.Job
 import kotlinx.coroutines.runBlocking
 import net.kyori.adventure.text.Component
@@ -26,7 +29,6 @@ import java.net.InetAddress
     id = "qplugin-velocity", name = "QPlugin-Velocity", version = BuildConstants.VERSION
 )
 class QPluginVelocity @Inject constructor(val logger: Logger, val proxy: ProxyServer){
-    val networkUtils: NetworkUtils = NetworkUtils()
     @Subscribe
     fun onProxyInitialization(event: ProxyInitializeEvent) {
         runBlocking { asyncProxyInitialization(event) }
@@ -34,7 +36,7 @@ class QPluginVelocity @Inject constructor(val logger: Logger, val proxy: ProxySe
     suspend fun asyncProxyInitialization(event: ProxyInitializeEvent) {
         logger.info("[QPluginVelocity] Initializing plugin...")
         logger.info("[QPluginVelocity] Testing endpoint: ${Configuration.CONFIG.endpoint}")
-        if (!networkUtils.checkUrl(Configuration.CONFIG.endpoint)) {
+        if (!NetworkUtils.checkUrl(Configuration.CONFIG.endpoint)) {
             logger.warn("[QPluginVelocity] Failed to connect to ${Configuration.CONFIG.endpoint}!")
         }
         logger.info("[QPluginVelocity] Starting job...")
@@ -54,7 +56,7 @@ class QPluginVelocity @Inject constructor(val logger: Logger, val proxy: ProxySe
         val ip: InetAddress = event.connection.remoteAddress.address
 
         val motd: Component =
-            when (networkUtils.get("${Configuration.CONFIG.endpoint}/qo/download/ip?ip=${ip.hostAddress}")) {
+            when (NetworkUtils.get("${Configuration.CONFIG.endpoint}/qo/download/ip?ip=${ip.hostAddress}")) {
                 "false" -> Component.text("Quantum Original Global").color(NamedTextColor.BLUE).appendNewline()
                     .content("Join our discord -> https://discord.gg/kWfNRNRC").color(NamedTextColor.GREEN)
 
@@ -71,9 +73,14 @@ class QPluginVelocity @Inject constructor(val logger: Logger, val proxy: ProxySe
 
 }
 class HeartbeatJob : Job {
-    val networkUtils: NetworkUtils = NetworkUtils()
-    override fun execute(ctx: JobExecutionContext): Unit = runBlocking {
-        networkUtils.post(Configuration.CONFIG.endpoint + "/qo/proxies/accept", Configuration.CONFIG.token)
+    override fun execute(ctx: JobExecutionContext) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                NetworkUtils.post(Configuration.CONFIG.endpoint + "/qo/proxies/accept", Configuration.CONFIG.token)
+            } catch (e: Exception) {
+                println("Heartbeat failed: ${e.message}")
+            }
+        }
     }
 }
 
