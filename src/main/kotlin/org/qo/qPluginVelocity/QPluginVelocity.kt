@@ -43,7 +43,7 @@ class QPluginVelocity @Inject constructor(val logger: Logger, val proxy: ProxySe
         if (!NetworkUtils.checkUrl(Configuration.CONFIG.endpoint)) {
             logger.warn("[QPluginVelocity] Failed to connect to ${Configuration.CONFIG.endpoint}!")
         }
-        val locResult = JsonParser.parseString(NetworkUtils.get("${Configuration.CONFIG.endpoint}/qo/proxies/query?token=${Configuration.CONFIG.token}")).asJsonObject.get("result").asJsonObject
+        val locResult = JsonParser.parseString(NetworkUtils.get("${Configuration.CONFIG.endpoint}/qo/proxies/query?token=${Configuration.CONFIG.token}")).asJsonObject
         if (locResult.get("code").asInt != 0) {
             logger.info("Could not find the specified location name. Is this endpoint registered?")
         } else {
