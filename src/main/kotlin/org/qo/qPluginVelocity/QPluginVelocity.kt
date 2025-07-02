@@ -1,5 +1,6 @@
 package org.qo.qPluginVelocity;
 
+import com.google.gson.JsonParser
 import com.google.inject.Inject
 import com.velocitypowered.api.event.Subscribe
 import com.velocitypowered.api.event.connection.LoginEvent
@@ -29,6 +30,9 @@ import java.net.InetAddress
     id = "qplugin-velocity", name = "QPlugin-Velocity", version = BuildConstants.VERSION
 )
 class QPluginVelocity @Inject constructor(val logger: Logger, val proxy: ProxyServer){
+    companion object {
+        var loc = "UNKNOWN"
+    }
     @Subscribe
     fun onProxyInitialization(event: ProxyInitializeEvent) {
         runBlocking { asyncProxyInitialization(event) }
@@ -38,6 +42,13 @@ class QPluginVelocity @Inject constructor(val logger: Logger, val proxy: ProxySe
         logger.info("[QPluginVelocity] Testing endpoint: ${Configuration.CONFIG.endpoint}")
         if (!NetworkUtils.checkUrl(Configuration.CONFIG.endpoint)) {
             logger.warn("[QPluginVelocity] Failed to connect to ${Configuration.CONFIG.endpoint}!")
+        }
+        val locResult = JsonParser.parseString(NetworkUtils.get("${Configuration.CONFIG.endpoint}/qo/proxies/query?token=${Configuration.CONFIG.token}")).asJsonObject.get("result").asJsonObject
+        if (locResult.get("code").asInt != 0) {
+            logger.info("Could not find the specified location name. Is this endpoint registered?")
+        } else {
+            logger.info("Loaded region as ${locResult.get("name").asString}")
+            loc = locResult.get("name").asString
         }
         logger.info("[QPluginVelocity] Starting job...")
         val job = JobBuilder.newJob(HeartbeatJob::class.java).withIdentity("MyJob", "group1").build()
@@ -55,7 +66,7 @@ class QPluginVelocity @Inject constructor(val logger: Logger, val proxy: ProxySe
     fun onProxyPing(event: ProxyPingEvent) = runBlocking {
         val ip: InetAddress = event.connection.remoteAddress.address
 
-        val motd: Component =
+        var motd: Component =
             when (NetworkUtils.get("${Configuration.CONFIG.endpoint}/qo/download/ip?ip=${ip.hostAddress}")) {
                 "false" -> Component.text("Quantum Original Global").color(NamedTextColor.BLUE).appendNewline()
                     .content("Join our discord -> https://discord.gg/kWfNRNRC").color(NamedTextColor.GREEN)
@@ -65,7 +76,7 @@ class QPluginVelocity @Inject constructor(val logger: Logger, val proxy: ProxySe
 
                 else -> Component.text("Quantum Original Global").color(NamedTextColor.BLUE).appendNewline()
                     .content("Join our discord -> https://discord.gg/kWfNRNRC").color(NamedTextColor.GREEN)
-            }
+            }.content("当前正在连接到/Currently connecting to: $loc").color(NamedTextColor.BLUE)
         val pong = event.ping.asBuilder()
         pong.description(motd)
         event.ping = pong.build()
