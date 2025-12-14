@@ -36,7 +36,6 @@ dependencies {
     implementation("io.ktor:ktor-client-core:${ktor_version}")
     implementation("io.ktor:ktor-client-content-negotiation:2.3.2")
     implementation("io.ktor:ktor-client-cio:${ktor_version}")
-    implementation("org.quartz-scheduler:quartz:2.5.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
 }
 val targetJavaVersion = 21

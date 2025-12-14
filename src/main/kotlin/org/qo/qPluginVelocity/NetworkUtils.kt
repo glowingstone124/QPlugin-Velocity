@@ -12,28 +12,47 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 
 object NetworkUtils {
-	val client = HttpClient(CIO)
-	suspend fun checkUrl(url: String): Boolean {
-		 return try {
-			 return client.get(url).status == HttpStatusCode.OK
-		 } catch (e: Exception) {
-			 false
-		 }
+	val client = HttpClient(CIO) {
+		engine {
+			requestTimeout = 800
+		}
+
+		install(io.ktor.client.plugins.HttpTimeout) {
+			connectTimeoutMillis = 800
+			socketTimeoutMillis = 800
+			requestTimeoutMillis = 800
+		}
+
+		expectSuccess = false
 	}
-	suspend fun post(url: String, body: Any,header: Map<String, String> = emptyMap()): String {
-		return client.post(url) {
+
+	suspend fun checkUrl(url: String): Boolean =
+		try {
+			client.get(url) == HttpStatusCode.OK
+		} catch (_: Exception) {
+			false
+		}
+
+	suspend fun get(
+		url: String,
+		header: Map<String, String> = emptyMap()
+	): String =
+		client.get(url) {
+			header.forEach { (k, v) -> headers.append(k, v) }
+		}.bodyAsText()
+
+	suspend fun post(
+		url: String,
+		body: Any,
+		header: Map<String, String> = emptyMap()
+	): String =
+		client.post(url) {
 			contentType(io.ktor.http.ContentType.Application.Json)
 			setBody(body)
-			header.forEach { (key, value) ->
-				headers.append(key, value)
-			}
+			header.forEach { (k, v) -> headers.append(k, v) }
 		}.bodyAsText()
-	}
-	suspend fun get(url: String, header: Map<String, String> = emptyMap()): String {
-		return client.get(url) {
-			header.forEach { (key, value) ->
-				headers.append(key, value)
-			}
-		}.bodyAsText()
+
+	fun close() {
+		client.close()
 	}
 }

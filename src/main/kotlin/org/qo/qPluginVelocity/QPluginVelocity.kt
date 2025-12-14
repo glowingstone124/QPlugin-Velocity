@@ -2,99 +2,138 @@ package org.qo.qPluginVelocity;
 
 import com.google.gson.JsonParser
 import com.google.inject.Inject
+import com.velocitypowered.api.event.ResultedEvent
 import com.velocitypowered.api.event.Subscribe
 import com.velocitypowered.api.event.connection.LoginEvent
-import com.velocitypowered.api.event.connection.PostLoginEvent
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent
 import com.velocitypowered.api.event.proxy.ProxyPingEvent
+import com.velocitypowered.api.event.proxy.ProxyShutdownEvent
 import com.velocitypowered.api.plugin.Plugin
 import com.velocitypowered.api.proxy.ProxyServer
-import com.velocitypowered.api.proxy.server.RegisteredServer
-import com.velocitypowered.api.proxy.server.ServerInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import org.quartz.Job
-import kotlinx.coroutines.runBlocking
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import org.quartz.JobBuilder
-import org.quartz.JobExecutionContext
-import org.quartz.SimpleScheduleBuilder
-import org.quartz.TriggerBuilder
-import org.quartz.impl.StdSchedulerFactory
 import org.slf4j.Logger
-import java.net.InetAddress
+import java.util.concurrent.TimeUnit
 
 @Plugin(
-    id = "qplugin-velocity", name = "QPlugin-Velocity", version = BuildConstants.VERSION
+	id = "qplugin-velocity",
+	name = "QPlugin-Velocity",
+	version = BuildConstants.VERSION
 )
-class QPluginVelocity @Inject constructor(val logger: Logger, val proxy: ProxyServer){
-    companion object {
-        var loc = "UNKNOWN"
-    }
-    @Subscribe
-    fun onProxyInitialization(event: ProxyInitializeEvent) {
-        runBlocking { asyncProxyInitialization(event) }
-    }
-    suspend fun asyncProxyInitialization(event: ProxyInitializeEvent) {
-        logger.info("[QPluginVelocity] Initializing plugin...")
-        logger.info("[QPluginVelocity] Testing endpoint: ${Configuration.CONFIG.endpoint}")
-        if (!NetworkUtils.checkUrl(Configuration.CONFIG.endpoint)) {
-            logger.warn("[QPluginVelocity] Failed to connect to ${Configuration.CONFIG.endpoint}!")
-        }
-        val locResult = JsonParser.parseString(NetworkUtils.get("${Configuration.CONFIG.endpoint}/qo/proxies/query?token=${Configuration.CONFIG.token}")).asJsonObject
-        if (locResult.get("code").asInt != 0) {
-            logger.info("Could not find the specified location name. Is this endpoint registered?")
-        } else {
-            logger.info("Loaded region as ${locResult.get("name").asString}")
-            loc = locResult.get("name").asString
-        }
-        logger.info("[QPluginVelocity] Starting job...")
-        val job = JobBuilder.newJob(HeartbeatJob::class.java).withIdentity("MyJob", "group1").build()
-        val trigger = TriggerBuilder.newTrigger().withIdentity("MyTrigger", "group1")
-            .startNow().withSchedule(
-                SimpleScheduleBuilder.simpleSchedule().withIntervalInMilliseconds(1500)
-                    .repeatForever()
-            )
-            .build()
-        val scheduler = StdSchedulerFactory.getDefaultScheduler()
-        scheduler.start()
-        scheduler.scheduleJob(job, trigger)
-    }
-    @Subscribe
-    fun onProxyPing(event: ProxyPingEvent) = runBlocking {
-        val ip: InetAddress = event.connection.remoteAddress.address
+class QPluginVelocity @Inject constructor(
+	val logger: Logger,
+	val server: ProxyServer
+) {
 
-        var motd: Component =
-            when (NetworkUtils.get("${Configuration.CONFIG.endpoint}/qo/download/ip?ip=${ip.hostAddress}")) {
-                "false" -> Component.text("Quantum Original Global").color(NamedTextColor.BLUE).appendNewline()
-                    .content("Join our discord -> https://discord.gg/kWfNRNRC").color(NamedTextColor.GREEN)
+	companion object {
+		@Volatile
+		var loc: String = "UNKNOWN"
 
-                "true" -> Component.text("Quantum Original 2").color(NamedTextColor.BLUE).appendNewline()
-                    .content("加入我们的qq群：946085440").color(NamedTextColor.GREEN)
+		@Volatile
+		var backendReady = false
 
-                else -> Component.text("Quantum Original Global").color(NamedTextColor.BLUE).appendNewline()
-                    .content("Join our discord -> https://discord.gg/kWfNRNRC").color(NamedTextColor.GREEN)
-            }.content("当前正在连接到/Currently connecting to: $loc").color(NamedTextColor.BLUE)
-        val pong = event.ping.asBuilder()
-        pong.description(motd)
-        event.ping = pong.build()
-    }
+		@Volatile
+		var failureCnt = 0
+	}
 
-}
-class HeartbeatJob : Job {
-    override fun execute(ctx: JobExecutionContext) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                NetworkUtils.post(Configuration.CONFIG.endpoint + "/qo/proxies/accept", Configuration.CONFIG.token)
-            } catch (e: Exception) {
-                println("Heartbeat failed: ${e.message}")
-            }
-        }
-    }
+	private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+	@Subscribe
+	fun onProxyInitialization(event: ProxyInitializeEvent) {
+		logger.info("[QPluginVelocity] Initializing...")
+		ioScope.launch {
+			initRemoteInfo()
+			startHeartbeat()
+		}
+	}
+
+	private suspend fun initRemoteInfo() {
+		try {
+			val json = NetworkUtils.get(
+				"${Configuration.CONFIG.endpoint}/qo/proxies/query?token=${Configuration.CONFIG.token}",
+			)
+
+			val obj = JsonParser.parseString(json).asJsonObject
+			if (obj["code"].asInt == 0) {
+				loc = obj["name"].asString
+				logger.info("Loaded region: $loc, Backend ready")
+				backendReady = true
+			} else {
+				logger.warn("Region not registered")
+			}
+		} catch (e: Exception) {
+			logger.warn("Init remote info failed: ${e.message}")
+		}
+	}
+
+	@Subscribe
+	fun onLogin(event: LoginEvent) {
+		if (!backendReady) {
+			event.result = ResultedEvent.ComponentResult.denied(
+				Component.text("我们这里出了错。").appendNewline()
+					.append(Component.text("和QAPI的通讯出现了短暂错误，请稍后再试。"))
+					.color(NamedTextColor.YELLOW)
+			)
+			return
+		}
+		if (loc == "UNKNOWN") {
+			event.result = ResultedEvent.ComponentResult.denied(
+				Component.text("我们这里出了错。").appendNewline()
+					.append(Component.text("网关无法连接到QAPI，如果该问题持续出现，请联系管理。"))
+					.color(NamedTextColor.RED)
+			)
+		}
+	}
+
+	@Subscribe
+	fun onProxyPing(event: ProxyPingEvent) {
+		val motd = Component.text("Quantum Original")
+			.color(NamedTextColor.BLUE)
+			.appendNewline()
+			.append(
+				Component.text("当前节点：$loc")
+					.color(NamedTextColor.GRAY)
+			)
+
+		event.ping = event.ping.asBuilder()
+			.description(motd)
+			.build()
+	}
+
+	@Subscribe
+	fun onProxyShutdown(event: ProxyShutdownEvent) {
+		NetworkUtils.close()
+	}
+
+	private fun startHeartbeat() {
+		server.scheduler.buildTask((this), Runnable {
+			ioScope.launch {
+				try {
+					NetworkUtils.post("${Configuration.CONFIG.endpoint}/qo/proxies/accept", Configuration.CONFIG.token)
+
+					failureCnt = 0
+					if (!backendReady) {
+						backendReady = true
+						logger.info("[QPluginVelocity] Backend ready")
+					}
+				} catch (e: Exception) {
+					failureCnt++
+					logger.error("Heartbeat failed: ${e.message}")
+					if (failureCnt >= 3 && backendReady) {
+						backendReady = false
+						logger.info("[QPluginVelocity] Heartbeat failed: ${failureCnt}, backend marked offline.")
+					}
+				}
+			}
+		}).repeat(800, TimeUnit.MILLISECONDS)
+			.schedule()
+	}
 }
 
 object BuildConstants {
-    const val VERSION = "Alpha 0.1"
+	const val VERSION = "Alpha 0.2"
 }
