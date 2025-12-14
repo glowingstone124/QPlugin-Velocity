@@ -39,7 +39,6 @@ class QPluginVelocity @Inject constructor(
 		@Volatile
 		var failureCnt = 0
 	}
-
 	private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 	@Subscribe

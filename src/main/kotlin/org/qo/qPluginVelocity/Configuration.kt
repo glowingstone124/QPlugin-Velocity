@@ -13,4 +13,7 @@ object Configuration {
 data class Config(
 	val endpoint: String,
 	val token: String,
+	val connectTimeoutMillis: Long,
+	val socketTimeMillis: Long,
+	val requestTimeoutMillis: Long,
 )

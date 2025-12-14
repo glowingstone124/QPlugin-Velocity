@@ -13,14 +13,10 @@ import io.ktor.http.contentType
 
 object NetworkUtils {
 	val client = HttpClient(CIO) {
-		engine {
-			requestTimeout = 800
-		}
-
 		install(io.ktor.client.plugins.HttpTimeout) {
-			connectTimeoutMillis = 800
-			socketTimeoutMillis = 800
-			requestTimeoutMillis = 800
+			connectTimeoutMillis = Configuration.CONFIG.connectTimeoutMillis
+			socketTimeoutMillis = Configuration.CONFIG.socketTimeMillis
+			requestTimeoutMillis = Configuration.CONFIG.requestTimeoutMillis
 		}
 
 		expectSuccess = false
